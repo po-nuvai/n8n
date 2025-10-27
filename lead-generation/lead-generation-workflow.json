@@ -1,0 +1,296 @@
+{
+  "name": "Lead Generation Workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "location",
+              "value": "New York, NY"
+            },
+            {
+              "name": "industry",
+              "value": "restaurants"
+            },
+            {
+              "name": "radius",
+              "value": "5000"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "b2c3d4e5-f6a7-8901-bcde-f12345678901",
+      "name": "Input Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [460, 300],
+      "notes": "Set your search parameters:\n- location: City, State or full address\n- industry: Type of business (restaurants, dentists, lawyers, etc.)\n- radius: Search radius in meters (default: 5000)"
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/geocode/json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "queryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.location }}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $credentials.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "c3d4e5f6-a7b8-9012-cdef-123456789012",
+      "name": "Geocode Location",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 300],
+      "credentials": {
+        "queryAuth": {
+          "id": "1",
+          "name": "Google Places API Key"
+        }
+      },
+      "notes": "Convert location name to coordinates"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.item.json.results;\n\nif (!results || results.length === 0) {\n  throw new Error('Location not found. Please check your location input.');\n}\n\nconst location = results[0].geometry.location;\n\nreturn {\n  lat: location.lat,\n  lng: location.lng,\n  formatted_address: results[0].formatted_address,\n  industry: $input.item.json.industry || $('Input Parameters').item.json.industry,\n  radius: $input.item.json.radius || $('Input Parameters').item.json.radius\n};"
+      },
+      "id": "d4e5f6a7-b8c9-0123-def0-123456789013",
+      "name": "Extract Coordinates",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300],
+      "notes": "Parse geocoding response"
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/nearbysearch/json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "queryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "location",
+              "value": "={{ $json.lat }},{{ $json.lng }}"
+            },
+            {
+              "name": "radius",
+              "value": "={{ $json.radius }}"
+            },
+            {
+              "name": "keyword",
+              "value": "={{ $json.industry }}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $credentials.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "e5f6a7b8-c9d0-1234-ef01-234567890124",
+      "name": "Search Places",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 300],
+      "credentials": {
+        "queryAuth": {
+          "id": "1",
+          "name": "Google Places API Key"
+        }
+      },
+      "notes": "Search for businesses using Google Places API"
+    },
+    {
+      "parameters": {
+        "jsCode": "const results = $input.item.json.results;\n\nif (!results || results.length === 0) {\n  return [{ json: { message: 'No businesses found for this search.' } }];\n}\n\n// Return array of place_ids to fetch details for each\nreturn results.map(place => ({\n  json: {\n    place_id: place.place_id,\n    name: place.name,\n    vicinity: place.vicinity\n  }\n}));"
+      },
+      "id": "f6a7b8c9-d0e1-2345-f012-345678901235",
+      "name": "Extract Place IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 300],
+      "notes": "Extract place IDs for detailed info"
+    },
+    {
+      "parameters": {
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "queryAuth",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "place_id",
+              "value": "={{ $json.place_id }}"
+            },
+            {
+              "name": "fields",
+              "value": "name,formatted_phone_number,website,formatted_address,business_status"
+            },
+            {
+              "name": "key",
+              "value": "={{ $credentials.apiKey }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "a7b8c9d0-e1f2-3456-0123-456789012346",
+      "name": "Get Business Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1560, 300],
+      "credentials": {
+        "queryAuth": {
+          "id": "1",
+          "name": "Google Places API Key"
+        }
+      },
+      "notes": "Fetch detailed information for each business"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.item.json.result;\n\nif (!result) {\n  return { json: { error: 'No details found' } };\n}\n\nreturn {\n  json: {\n    business_name: result.name || 'N/A',\n    phone: result.formatted_phone_number || 'N/A',\n    website: result.website || 'N/A',\n    address: result.formatted_address || 'N/A',\n    business_status: result.business_status || 'N/A'\n  }\n};"
+      },
+      "id": "b8c9d0e1-f2a3-4567-1234-567890123457",
+      "name": "Format Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 300],
+      "notes": "Extract and format the final lead information"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "c9d0e1f2-a3b4-5678-2345-678901234568",
+      "name": "Aggregate Leads",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [2000, 300],
+      "notes": "Combine all leads into a single output"
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Input Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Parameters": {
+      "main": [
+        [
+          {
+            "node": "Geocode Location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode Location": {
+      "main": [
+        [
+          {
+            "node": "Extract Coordinates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Coordinates": {
+      "main": [
+        [
+          {
+            "node": "Search Places",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Places": {
+      "main": [
+        [
+          {
+            "node": "Extract Place IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Place IDs": {
+      "main": [
+        [
+          {
+            "node": "Get Business Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Details": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-27T00:00:00.000Z",
+  "versionId": "1"
+}
