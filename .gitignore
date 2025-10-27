@@ -1,0 +1,30 @@
+# Freelancer and internal files (not for customers)
+FREELANCER_NOTES.md
+FOR_CUSTOMER_DELIVERY.md
+FINAL_SUMMARY.md
+SEND_TO_CUSTOMER.txt
+create-customer-package.sh
+customer-package/
+*.zip
+
+# Old versions
+FOOD_DELIVERY_SETUP_GUIDE.md
+WHATSAPP_TEMPLATE_SETUP.md
+
+# Environment files
+.env
+*.env
+
+# n8n specific
+.n8n/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
