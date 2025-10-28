@@ -1,0 +1,245 @@
+{
+  "name": "Food Delivery Order Status - Telegram Notifications",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "order-status-update",
+        "options": {}
+      },
+      "id": "be84c2a2-3ab9-4747-a4ec-bd93ff108e1f",
+      "name": "Order Status Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        208
+      ],
+      "webhookId": "order-status-webhook"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "status-received",
+                    "leftValue": "={{ $json.orderStatus }}",
+                    "rightValue": "order_received",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Order Received"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "status-processing",
+                    "leftValue": "={{ $json.orderStatus }}",
+                    "rightValue": "in_process",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "In Process"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": false,
+                  "leftValue": "",
+                  "typeValidation": "strict"
+                },
+                "conditions": [
+                  {
+                    "id": "status-dispatched",
+                    "leftValue": "={{ $json.orderStatus }}",
+                    "rightValue": "dispatched",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Dispatched"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "29d14a13-f032-4c76-bae6-c55a0f7d9c59",
+      "name": "Check Order Status",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        -256,
+        208
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot={{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.customerChatId }}\",\n  \"text\": \"🎉 *Order Received!*\\n\\nHi {{ $json.customerName }}, we've received your order #{{ $json.orderId }} for {{ $json.orderItems }}. We're preparing it now!\\n\\nThank you for choosing us!\",\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "8f734b40-2beb-4381-9053-d31c46be8ed3",
+      "name": "Send Telegram - Order Received",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        0
+      ],
+      "notes": "Sends order confirmation message to customer via Telegram"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot={{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.customerChatId }}\",\n  \"text\": \"👨‍🍳 *Order In Process*\\n\\nHi {{ $json.customerName }}, your order #{{ $json.orderId }} is being prepared by our kitchen!\\n\\n⏱️ Estimated time: {{ $json.estimatedTime }} minutes\\n\\nWe'll notify you when it's ready for dispatch!\",\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "efee3532-74dd-44d2-aa23-3ac5daac28f3",
+      "name": "Send Telegram - In Process",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        208
+      ],
+      "notes": "Notifies customer that order is being prepared"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.telegram.org/bot={{ $env.TELEGRAM_BOT_TOKEN }}/sendMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"chat_id\": \"{{ $json.customerChatId }}\",\n  \"text\": \"🚀 *Order Dispatched!*\\n\\nHi {{ $json.customerName }}, your order #{{ $json.orderId }} is on its way!\\n\\n👤 Driver: {{ $json.driverName }}\\n📞 Contact: {{ $json.driverPhone }}\\n\\n📍 Track your order: {{ $json.trackingLink }}\\n\\nEnjoy your meal!\",\n  \"parse_mode\": \"Markdown\"\n}",
+        "options": {}
+      },
+      "id": "dfaba6b7-5426-4960-9ee8-aeed113bca5f",
+      "name": "Send Telegram - Dispatched",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        0,
+        400
+      ],
+      "notes": "Notifies customer with delivery driver details"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Order Status Webhook": {
+      "main": [
+        [
+          {
+            "node": "Check Order Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Order Status": {
+      "main": [
+        [
+          {
+            "node": "Send Telegram - Order Received",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Telegram - In Process",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Telegram - Dispatched",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "telegram-food-delivery-v1",
+  "meta": {
+    "instanceId": "telegram-food-delivery-notification-system"
+  },
+  "id": "TelegramFoodDelivery01",
+  "tags": []
+}
