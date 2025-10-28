@@ -4,6 +4,8 @@
 
 This n8n workflow automates lead generation by searching for businesses based on location and industry using the Google Places API. It extracts valuable business information including names, phone numbers, websites, and addresses.
 
+**🚀 New: Automatic Pagination** - The workflow now fetches up to **60 leads per search** (previously 20) by automatically handling Google Places API pagination with proper delays between requests.
+
 ### What This Workflow Does
 
 **Input:**
@@ -76,7 +78,7 @@ This n8n workflow automates lead generation by searching for businesses based on
 
 **Monthly Free Usage Estimate:**
 - Approximately **200-250 lead searches** per month within free tier
-- Each search can return up to 20 businesses
+- Each search can return up to **60 businesses** (with automatic pagination)
 
 **Tips to Stay Within Free Tier:**
 1. Set up billing alerts in GCP
@@ -159,7 +161,7 @@ The final output includes an array of businesses with:
 2. **Input Parameters:** Set location, industry, and radius
 3. **Geocode Location:** Converts location name to GPS coordinates
 4. **Extract Coordinates:** Parses geocoding response
-5. **Search Places:** Finds businesses matching criteria
+5. **Search Places with Pagination:** Finds businesses matching criteria (automatically fetches all pages up to 60 results)
 6. **Extract Place IDs:** Gets unique IDs for each business
 7. **Get Business Details:** Fetches detailed info (phone, website, etc.)
 8. **Format Lead Data:** Cleans and structures the output
@@ -367,7 +369,7 @@ Add a **Code** node to score leads based on:
 - Industry: "restaurants"
 - Radius: 3000 (3km)
 
-**Result:** 20-60 restaurant leads with contact info
+**Result:** Up to 60 restaurant leads with contact info
 
 ### 2. B2B Sales Prospecting
 
@@ -378,7 +380,7 @@ Add a **Code** node to score leads based on:
 - Industry: "dental offices"
 - Radius: 10000 (10km)
 
-**Result:** 30-80 dental practice leads
+**Result:** Up to 60 dental practice leads
 
 ### 3. Real Estate Lead Generation
 
@@ -389,7 +391,7 @@ Add a **Code** node to score leads based on:
 - Industry: "property management"
 - Radius: 15000 (15km)
 
-**Result:** 40-100 property management leads
+**Result:** Up to 60 property management leads
 
 ### 4. Multi-Location Campaigns
 
@@ -465,7 +467,7 @@ Add a **Code** node to score leads based on:
 ## FAQ
 
 **Q: How many leads can I generate per month for free?**
-A: Approximately 200-250 searches, with each search returning up to 20 businesses (4,000-5,000 total leads).
+A: Approximately 200-250 searches, with each search returning up to 60 businesses (12,000-15,000 total leads with pagination enabled).
 
 **Q: Can I get email addresses?**
 A: Google Places API doesn't provide emails. You'd need to scrape websites or use third-party enrichment services.
@@ -523,6 +525,12 @@ This workflow is provided as-is for educational and commercial use. Ensure compl
 ---
 
 ## Version History
+
+- **v1.1** (2025-10-28): Pagination Support
+  - Added automatic pagination to fetch up to 60 results (instead of 20)
+  - Handles Google Places API next_page_token automatically
+  - Implements required 2-second delay between paginated requests
+  - Up to 3x more leads per search
 
 - **v1.0** (2025-10-27): Initial release
   - Basic lead generation workflow
