@@ -1,0 +1,347 @@
+{
+  "name": "Lead Generation 1000+ (Grid Search with Pagination)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "trigger-001",
+      "name": "When clicking 'Test workflow'",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 400]
+    },
+    {
+      "parameters": {
+        "values": {
+          "string": [
+            {
+              "name": "location",
+              "value": "Bangalore, India"
+            },
+            {
+              "name": "industry",
+              "value": "dentists"
+            },
+            {
+              "name": "gridSize",
+              "value": "5"
+            },
+            {
+              "name": "coverageRadiusKm",
+              "value": "25"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "input-001",
+      "name": "Input Parameters",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 2,
+      "position": [460, 400],
+      "notes": "Configure:\n- location: City/area to search\n- industry: Business type\n- gridSize: 3-7 (higher = more leads, more cost)\n- coverageRadiusKm: Area radius to cover"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://maps.googleapis.com/maps/api/geocode/json",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "address",
+              "value": "={{ $json.location }}"
+            },
+            {
+              "name": "key",
+              "value": "={{ $credentials.apiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "geocode-001",
+      "name": "Geocode Location",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [680, 400],
+      "notes": "Convert location to coordinates"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract coordinates and create grid of search areas\nconst results = $input.item.json.results;\n\nif (!results || results.length === 0) {\n  throw new Error('Location not found. Please check your location input.');\n}\n\nconst centerLocation = results[0].geometry.location;\nconst centerLat = centerLocation.lat;\nconst centerLng = centerLocation.lng;\n\n// Get parameters from input\nconst industry = $('Input Parameters').item.json.industry;\nconst gridSize = parseInt($('Input Parameters').item.json.gridSize) || 5;\nconst coverageRadiusKm = parseFloat($('Input Parameters').item.json.coverageRadiusKm) || 25;\n\n// Calculate grid parameters\nconst cellSizeKm = (coverageRadiusKm * 2) / gridSize;\nconst searchRadiusM = Math.round((cellSizeKm / 2) * 1000 * 1.2); // 20% overlap\n\n// Earth's radius in km (for lat/lng calculations)\nconst earthRadiusKm = 111.32; // 1 degree latitude ≈ 111.32 km\n\n// Generate grid cells\nconst gridCells = [];\nfor (let row = 0; row < gridSize; row++) {\n  for (let col = 0; col < gridSize; col++) {\n    // Calculate offset from center\n    const latOffset = (row - (gridSize - 1) / 2) * (cellSizeKm / earthRadiusKm);\n    const lngOffset = (col - (gridSize - 1) / 2) * (cellSizeKm / (earthRadiusKm * Math.cos(centerLat * Math.PI / 180)));\n    \n    const cellLat = centerLat + latOffset;\n    const cellLng = centerLng + lngOffset;\n    \n    gridCells.push({\n      cell_id: row * gridSize + col + 1,\n      lat: cellLat,\n      lng: cellLng,\n      radius: searchRadiusM,\n      industry: industry,\n      row: row + 1,\n      col: col + 1\n    });\n  }\n}\n\n// Return metadata and grid cells as separate items for looping\nreturn {\n  json: {\n    center_location: results[0].formatted_address,\n    center_lat: centerLat,\n    center_lng: centerLng,\n    grid_size: gridSize,\n    total_cells: gridCells.length,\n    coverage_radius_km: coverageRadiusKm,\n    cell_size_km: cellSizeKm,\n    search_radius_m: searchRadiusM,\n    industry: industry,\n    grid_cells: gridCells\n  }\n};"
+      },
+      "id": "grid-calc-001",
+      "name": "Calculate Grid",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400],
+      "notes": "Divide area into grid for comprehensive coverage"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "assign-001",
+              "name": "grid_metadata",
+              "value": "={{ $json }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "store-metadata-001",
+      "name": "Store Grid Metadata",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1120, 400],
+      "notes": "Store grid info for later use"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract grid cells array and create separate items for looping\nconst gridCells = $input.item.json.grid_cells;\n\nif (!gridCells || gridCells.length === 0) {\n  throw new Error('No grid cells generated');\n}\n\n// Return each cell as a separate item\nreturn gridCells.map(cell => ({ json: cell }));"
+      },
+      "id": "split-cells-001",
+      "name": "Split Grid Cells",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400],
+      "notes": "Create separate item for each grid cell"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Search Google Places API with pagination for current grid cell\nconst cellLat = $input.item.json.lat;\nconst cellLng = $input.item.json.lng;\nconst radius = $input.item.json.radius;\nconst industry = $input.item.json.industry;\nconst cellId = $input.item.json.cell_id;\n\n// Get API key from credentials\nconst apiKey = $credentials.apiKey;\n\nif (!apiKey) {\n  throw new Error('API key not found in credentials');\n}\n\nconst axios = require('axios');\nconst baseUrl = 'https://maps.googleapis.com/maps/api/place/nearbysearch/json';\n\nlet allResults = [];\nlet nextPageToken = null;\nlet pageCount = 0;\nconst maxPages = 3; // Google allows max 3 pages (60 results)\n\n// Function to delay execution (Google requires ~2 sec between paginated requests)\nconst delay = ms => new Promise(resolve => setTimeout(resolve, ms));\n\ntry {\n  // Fetch first page\n  let url = `${baseUrl}?location=${cellLat},${cellLng}&radius=${radius}&keyword=${encodeURIComponent(industry)}&key=${apiKey}`;\n  \n  let response = await axios.get(url);\n  let data = response.data;\n  \n  if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {\n    console.log(`Cell ${cellId}: API returned ${data.status}`);\n    // Don't throw error, just return empty results for this cell\n    return {\n      json: {\n        cell_id: cellId,\n        total_results: 0,\n        pages_fetched: 0,\n        results: []\n      }\n    };\n  }\n  \n  if (data.results && data.results.length > 0) {\n    allResults = allResults.concat(data.results);\n    pageCount++;\n  }\n  \n  nextPageToken = data.next_page_token;\n  \n  // Fetch additional pages if available\n  while (nextPageToken && pageCount < maxPages) {\n    // Google requires ~2 second delay before using next_page_token\n    await delay(2500);\n    \n    url = `${baseUrl}?pagetoken=${nextPageToken}&key=${apiKey}`;\n    response = await axios.get(url);\n    data = response.data;\n    \n    if (data.status !== 'OK') {\n      // INVALID_REQUEST means token not ready yet, break the loop\n      if (data.status === 'INVALID_REQUEST') {\n        console.log(`Cell ${cellId}: Page token not ready, stopping pagination`);\n        break;\n      }\n      console.log(`Cell ${cellId}: Error on page ${pageCount + 1}: ${data.status}`);\n      break;\n    }\n    \n    if (data.results && data.results.length > 0) {\n      allResults = allResults.concat(data.results);\n      pageCount++;\n    }\n    \n    nextPageToken = data.next_page_token;\n  }\n  \n  console.log(`Cell ${cellId}: Found ${allResults.length} results across ${pageCount} pages`);\n  \n  // Return results for this cell\n  return {\n    json: {\n      cell_id: cellId,\n      total_results: allResults.length,\n      pages_fetched: pageCount,\n      results: allResults\n    }\n  };\n  \n} catch (error) {\n  console.error(`Cell ${cellId}: Failed to fetch places: ${error.message}`);\n  // Return empty results instead of failing entire workflow\n  return {\n    json: {\n      cell_id: cellId,\n      total_results: 0,\n      pages_fetched: 0,\n      results: [],\n      error: error.message\n    }\n  };\n}"
+      },
+      "id": "search-paginated-001",
+      "name": "Search Cell with Pagination",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1560, 400],
+      "notes": "Fetch up to 60 results per cell using next_page_token",
+      "alwaysOutputData": true
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract all place results from all grid cells\nconst items = $input.all();\n\nlet allPlaces = [];\nlet totalCellsSearched = 0;\nlet totalResultsBeforeDedup = 0;\n\n// Collect all results from all cells\nfor (const item of items) {\n  const cellData = item.json;\n  if (cellData.results && cellData.results.length > 0) {\n    allPlaces = allPlaces.concat(cellData.results);\n    totalResultsBeforeDedup += cellData.results.length;\n  }\n  totalCellsSearched++;\n}\n\nif (allPlaces.length === 0) {\n  return {\n    json: {\n      message: 'No businesses found across any grid cells.',\n      cells_searched: totalCellsSearched,\n      total_results: 0,\n      unique_results: 0,\n      places: []\n    }\n  };\n}\n\n// Deduplicate by place_id\nconst uniquePlacesMap = new Map();\nfor (const place of allPlaces) {\n  if (!uniquePlacesMap.has(place.place_id)) {\n    uniquePlacesMap.set(place.place_id, place);\n  }\n}\n\nconst uniquePlaces = Array.from(uniquePlacesMap.values());\nconst duplicateCount = allPlaces.length - uniquePlaces.length;\n\nconsole.log(`Deduplication complete: ${allPlaces.length} total → ${uniquePlaces.length} unique (${duplicateCount} duplicates removed)`);\n\nreturn {\n  json: {\n    cells_searched: totalCellsSearched,\n    total_results_before_dedup: totalResultsBeforeDedup,\n    unique_results: uniquePlaces.length,\n    duplicates_removed: duplicateCount,\n    places: uniquePlaces\n  }\n};"
+      },
+      "id": "dedup-001",
+      "name": "Aggregate & Deduplicate",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 400],
+      "notes": "Combine all cells and remove duplicates by place_id"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract unique place IDs for detail fetching\nconst places = $input.item.json.places;\n\nif (!places || places.length === 0) {\n  return [{ json: { message: 'No places to fetch details for' } }];\n}\n\n// Return array of place_ids to fetch details for each\nreturn places.map(place => ({\n  json: {\n    place_id: place.place_id,\n    name: place.name,\n    vicinity: place.vicinity\n  }\n}));"
+      },
+      "id": "extract-ids-001",
+      "name": "Extract Place IDs",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400],
+      "notes": "Prepare unique place IDs for detail fetching"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://maps.googleapis.com/maps/api/place/details/json",
+        "authentication": "none",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "place_id",
+              "value": "={{ $json.place_id }}"
+            },
+            {
+              "name": "fields",
+              "value": "name,formatted_phone_number,website,formatted_address,business_status,rating,user_ratings_total"
+            },
+            {
+              "name": "key",
+              "value": "={{ $credentials.apiKey }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "details-001",
+      "name": "Get Business Details",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 400],
+      "notes": "Fetch detailed info for each business"
+    },
+    {
+      "parameters": {
+        "jsCode": "const result = $input.item.json.result;\n\nif (!result) {\n  return { json: { error: 'No details found' } };\n}\n\nreturn {\n  json: {\n    business_name: result.name || 'N/A',\n    phone: result.formatted_phone_number || 'N/A',\n    website: result.website || 'N/A',\n    address: result.formatted_address || 'N/A',\n    business_status: result.business_status || 'N/A',\n    rating: result.rating || 'N/A',\n    reviews_count: result.user_ratings_total || 0\n  }\n};"
+      },
+      "id": "format-001",
+      "name": "Format Lead Data",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 400],
+      "notes": "Structure final lead information"
+    },
+    {
+      "parameters": {
+        "mode": "combine",
+        "combineBy": "combineAll",
+        "options": {}
+      },
+      "id": "aggregate-001",
+      "name": "Final Lead List",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [2660, 400],
+      "notes": "Combine all leads into final output"
+    }
+  ],
+  "connections": {
+    "When clicking 'Test workflow'": {
+      "main": [
+        [
+          {
+            "node": "Input Parameters",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Input Parameters": {
+      "main": [
+        [
+          {
+            "node": "Geocode Location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Geocode Location": {
+      "main": [
+        [
+          {
+            "node": "Calculate Grid",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Grid": {
+      "main": [
+        [
+          {
+            "node": "Store Grid Metadata",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Grid Metadata": {
+      "main": [
+        [
+          {
+            "node": "Split Grid Cells",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Grid Cells": {
+      "main": [
+        [
+          {
+            "node": "Search Cell with Pagination",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Cell with Pagination": {
+      "main": [
+        [
+          {
+            "node": "Aggregate & Deduplicate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate & Deduplicate": {
+      "main": [
+        [
+          {
+            "node": "Extract Place IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Place IDs": {
+      "main": [
+        [
+          {
+            "node": "Get Business Details",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Business Details": {
+      "main": [
+        [
+          {
+            "node": "Format Lead Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Lead Data": {
+      "main": [
+        [
+          {
+            "node": "Final Lead List",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2025-10-31T00:00:00.000Z",
+  "versionId": "2"
+}
