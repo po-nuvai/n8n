@@ -86,34 +86,13 @@
     },
     {
       "parameters": {
-        "assignments": {
-          "assignments": [
-            {
-              "id": "assign-001",
-              "name": "grid_metadata",
-              "value": "={{ $json }}",
-              "type": "object"
-            }
-          ]
-        },
-        "options": {}
-      },
-      "id": "store-metadata-001",
-      "name": "Store Grid Metadata",
-      "type": "n8n-nodes-base.set",
-      "typeVersion": 3.4,
-      "position": [1120, 400],
-      "notes": "Store grid info for later use"
-    },
-    {
-      "parameters": {
-        "jsCode": "// Extract grid cells array and create separate items for looping\nconst gridCells = $input.item.json.grid_cells;\n\nif (!gridCells || gridCells.length === 0) {\n  throw new Error('No grid cells generated');\n}\n\n// Return each cell as a separate item\nreturn gridCells.map(cell => ({ json: cell }));"
+        "jsCode": "// Extract grid cells array and create separate items for looping\n// The previous node (Calculate Grid) outputs grid_cells array\nconst inputData = $input.item.json;\n\n// Try to access grid_cells from different possible paths\nlet gridCells = inputData.grid_cells || inputData.grid_metadata?.grid_cells;\n\nif (!gridCells || gridCells.length === 0) {\n  // Debug: log the actual structure\n  console.log('Input data structure:', JSON.stringify(inputData, null, 2));\n  throw new Error('No grid cells generated. Check the Calculate Grid node output.');\n}\n\nconsole.log(`Splitting ${gridCells.length} grid cells for parallel processing`);\n\n// Return each cell as a separate item for parallel processing\nreturn gridCells.map(cell => ({ json: cell }));"
       },
       "id": "split-cells-001",
       "name": "Split Grid Cells",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1340, 400],
+      "position": [1120, 400],
       "notes": "Create separate item for each grid cell"
     },
     {
@@ -124,7 +103,7 @@
       "name": "Search Cell with Pagination",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1560, 400],
+      "position": [1340, 400],
       "notes": "Fetch up to 60 results per cell using next_page_token",
       "alwaysOutputData": true
     },
@@ -136,7 +115,7 @@
       "name": "Aggregate & Deduplicate",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [1780, 400],
+      "position": [1560, 400],
       "notes": "Combine all cells and remove duplicates by place_id"
     },
     {
@@ -147,7 +126,7 @@
       "name": "Extract Place IDs",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2000, 400],
+      "position": [1780, 400],
       "notes": "Prepare unique place IDs for detail fetching"
     },
     {
@@ -184,7 +163,7 @@
       "name": "Get Business Details",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.1,
-      "position": [2220, 400],
+      "position": [2000, 400],
       "notes": "Fetch detailed info for each business"
     },
     {
@@ -195,7 +174,7 @@
       "name": "Format Lead Data",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [2440, 400],
+      "position": [2220, 400],
       "notes": "Structure final lead information"
     },
     {
@@ -208,7 +187,7 @@
       "name": "Final Lead List",
       "type": "n8n-nodes-base.aggregate",
       "typeVersion": 1,
-      "position": [2660, 400],
+      "position": [2440, 400],
       "notes": "Combine all leads into final output"
     }
   ],
@@ -247,17 +226,6 @@
       ]
     },
     "Calculate Grid": {
-      "main": [
-        [
-          {
-            "node": "Store Grid Metadata",
-            "type": "main",
-            "index": 0
-          }
-        ]
-      ]
-    },
-    "Store Grid Metadata": {
       "main": [
         [
           {
